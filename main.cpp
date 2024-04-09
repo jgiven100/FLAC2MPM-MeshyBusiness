@@ -57,11 +57,8 @@ void write_particle_stresses();
 void write_particle_stresses_beginning();
 
 // Save particle volumes txt file
-void write_particle_volumes(
-    const std::vector<std::pair<double, double>> &particle_coords,
-    const double vol);
+void write_particle_volumes(const int nparticles, const double vol);
 
-// Generate mesh and node sets
 void generate_mesh_files(const double xmin, const double xmax,
                          const double ymin, const double ymax,
                          const double he) {
@@ -322,6 +319,13 @@ void generate_particle_files(const double xmin, const double xmax,
       dense_particle_coords.erase(pitr->first);
   }
 
+  // Particle cells (order matching how particles are located)
+  std::vector<int> particle_cells;
+  // Particle zone (for stresses later)
+  std::map<int, int> particle_zones;
+  // Total particles
+  int nparticles = 0;
+
   // Loop each zone group
   for (unsigned i = 0; i < name_zone_groups.size(); i++) {
     std::cout << "particles-" << i << ".txt -> " << name_zone_groups[i]
@@ -333,7 +337,7 @@ void generate_particle_files(const double xmin, const double xmax,
     // Get list of zones for current zone group
     const std::vector<int> zone_group = zone_groups[i];
 
-    //
+    // Particle coordinates in current zone
     std::vector<std::pair<double, double>> particle_coords_zone;
     particle_coords_zone.clear();
 
@@ -346,8 +350,16 @@ void generate_particle_files(const double xmin, const double xmax,
         for (auto pitr = dense_particle_coords_copy.begin();
              pitr != dense_particle_coords_copy.end(); ++pitr) {
           if (find_particle_quad(gridpoints, q_zones[zid], pitr->second)) {
+            // Save particle coordinate
             particle_coords_zone.emplace_back(pitr->second);
+            // Remove particle coordinate from dense list
             dense_particle_coords.erase(pitr->first);
+            // Save cell id
+            particle_cells.emplace_back(dense_particle_cells[pitr->first]);
+            // Save zone id
+            particle_zones[nparticles] = zid;
+            // Update total particles
+            ++nparticles;
           }
         }
 
@@ -356,8 +368,16 @@ void generate_particle_files(const double xmin, const double xmax,
         for (auto pitr = dense_particle_coords_copy.begin();
              pitr != dense_particle_coords_copy.end(); ++pitr) {
           if (find_particle_tri(gridpoints, t_zones[zid], pitr->second)) {
+            // Save particle coordinate
             particle_coords_zone.emplace_back(pitr->second);
+            // Remove particle coordinate from dense list
             dense_particle_coords.erase(pitr->first);
+            // Save cell id
+            particle_cells.emplace_back(dense_particle_cells[pitr->first]);
+            // Save zone id
+            particle_zones[nparticles] = zid;
+            // Update total particles
+            ++nparticles;
           }
         }
 
@@ -369,36 +389,20 @@ void generate_particle_files(const double xmin, const double xmax,
     write_particle_coords(i, particle_coords_zone);
   }
 
-  // TODO REMOVE ME
-  // for (const auto &gridpoint : gridpoints)
-  //   std::cout << std::fixed << std::setprecision(10) << gridpoint.first << "
-  //   " << gridpoint.second.first << " " << gridpoint.second.second <<
-  //   std::endl;
+  // Particle cells
+  write_particle_cells(particle_cells);
 
-  // for (const auto &q_zone : q_zones)
-  //   std::cout << q_zone.first << " " << std::get<0>(q_zone.second) << " " <<
-  //   std::get<1>(q_zone.second) << " " << std::get<2>(q_zone.second) << " " <<
-  //   std::get<3>(q_zone.second) << std::endl;
+  // std::vector<std::tuple<double, double, double, double, double, double>>
+  //     particle_stresses;
+  // write_particle_stresses();
 
-  // for (const auto &t_zone : t_zones)
-  //   std::cout << t_zone.first << " " << std::get<0>(t_zone.second) << " " <<
-  //   std::get<1>(t_zone.second) << " " << std::get<2>(t_zone.second) <<
-  //   std::endl;
+  // std::vector<std::tuple<double, double, double, double, double, double>>
+  //     particle_stresses_beginning;
+  // write_particle_stresses_beginning();
 
-  std::vector<std::tuple<double, double, double, double, double, double>>
-      particle_stresses;
-  std::vector<std::tuple<double, double, double, double, double, double>>
-      particle_stresses_beginning;
-
-  // write_particle_cells(particle_cells);
-
-  // // write_particle_stresses();
-
-  // // write_particle_stresses_beginning();
-
-  // // Particle volume
-  // const double vol = (he * he) / (ppc * ppc);
-  // write_particle_volumes(particle_coords, vol);
+  // Particle volume
+  const double vol = (he * he) / (ppc * ppc);
+  write_particle_volumes(nparticles, vol);
 }
 
 void load_flac(std::string fname,
@@ -600,12 +604,7 @@ void write_particle_cells(const std::vector<int> &particle_cells) {
   }
 }
 
-void write_particle_volumes(
-    const std::vector<std::pair<double, double>> &particle_coords,
-    const double vol) {
-  // Number of particles
-  const int nparticles = particle_coords.size();
-
+void write_particle_volumes(const int nparticles, const double vol) {
   // Write particle volumes
   std::ofstream outfile("particles-volumes.txt");
   if (outfile.is_open()) {

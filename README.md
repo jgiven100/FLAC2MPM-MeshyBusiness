@@ -47,10 +47,9 @@ Definitions:
     * `nset_id=1` := right boundary
     * `nset_id=2` := bottom boundary
 * Particle coordinates
+* Particle cells
+* Particle volumes
 
 *TODO*
-* Particle coordinates
-* Particle cells
 * Particle stresses
 * Particle stresses (beginning)
-* Particle volumes
