@@ -1,6 +1,7 @@
 #include "external/json.hpp"
 using json = nlohmann::json;
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -25,21 +26,23 @@ void write_entity_set(const int nnode_x, const int nnode_y, const double he);
 // Read FLAC file
 void load_flac(std::string fname,
                std::map<int, std::pair<double, double>> &gridpoints,
-               std::map<int, std::tuple<int, int, int, int>> &q_zones,
-               std::map<int, std::tuple<int, int, int>> &t_zones,
+               std::map<int, std::array<int, 4>> &q_zones,
+               std::map<int, std::array<int, 3>> &t_zones,
                std::vector<std::vector<int>> &zone_groups,
-               std::vector<std::string> &name_zone_groups,
-               std::vector<std::tuple<int, int, int>> &faces,
-               std::vector<std::vector<int>> &face_groups);
+               std::vector<std::string> &name_zone_groups);
+
+// Read FLAC stresses
+void load_stress(std::string stress_fname,
+                 std::map<int, std::array<double, 4>> &stress_zones);
 
 // Find particle
 bool find_particle_quad(std::map<int, std::pair<double, double>> &gridpoints,
-                        std::tuple<int, int, int, int> &nodes,
+                        std::array<int, 4> &nodes,
                         std::pair<double, double> &particle_coord);
 
 // Find particle
 bool find_particle_tri(std::map<int, std::pair<double, double>> &gridpoints,
-                       std::tuple<int, int, int> &nodes,
+                       std::array<int, 3> &nodes,
                        std::pair<double, double> &particle_coord);
 
 // Save particle coordinates txt file
@@ -51,10 +54,8 @@ void write_particle_coords(
 void write_particle_cells(const std::vector<int> &particle_cells);
 
 // Save particle stresses txt file
-void write_particle_stresses();
-
-// Save particle stresses beginning txt file
-void write_particle_stresses_beginning();
+void write_particle_stresses(
+    const std::vector<std::array<double, 4>> &particle_stresses);
 
 // Save particle volumes txt file
 void write_particle_volumes(const int nparticles, const double vol);
@@ -238,7 +239,8 @@ void write_entity_set(const int nnode_x, const int nnode_y, const double he) {
 void generate_particle_files(const double xmin, const double xmax,
                              const double ymin, const double ymax,
                              const double he, const int ppc,
-                             const std::string fname) {
+                             const std::string fname,
+                             const std::string stress_fname) {
   // Number of elements in each direction
   int nelem_x, nelem_y;
   check_compatibility(nelem_x, nelem_y, xmin, xmax, ymin, ymax, he);
@@ -279,15 +281,15 @@ void generate_particle_files(const double xmin, const double xmax,
 
   // Load FLAC grippoints and zones
   std::map<int, std::pair<double, double>> gridpoints;
-  std::map<int, std::tuple<int, int, int, int>> q_zones;
-  std::map<int, std::tuple<int, int, int>> t_zones;
+  std::map<int, std::array<int, 4>> q_zones;
+  std::map<int, std::array<int, 3>> t_zones;
   std::vector<std::vector<int>> zone_groups;
   std::vector<std::string> name_zone_groups;
-  std::vector<std::tuple<int, int, int>> faces;
-  std::vector<std::vector<int>> face_groups;
+  load_flac(fname, gridpoints, q_zones, t_zones, zone_groups, name_zone_groups);
 
-  load_flac(fname, gridpoints, q_zones, t_zones, zone_groups, name_zone_groups,
-            faces, face_groups);
+  // Load FLAC stresses
+  std::map<int, std::array<double, 4>> stress_zones;
+  load_stress(stress_fname, stress_zones);
 
   // Bounding box
   double xmin_flac = 1.E+6;
@@ -321,8 +323,8 @@ void generate_particle_files(const double xmin, const double xmax,
 
   // Particle cells (order matching how particles are located)
   std::vector<int> particle_cells;
-  // Particle zone (for stresses later)
-  std::map<int, int> particle_zones;
+  // Particle stresses (order matching how particles are located)
+  std::vector<std::array<double, 4>> particle_stresses;
   // Total particles
   int nparticles = 0;
 
@@ -356,8 +358,8 @@ void generate_particle_files(const double xmin, const double xmax,
             dense_particle_coords.erase(pitr->first);
             // Save cell id
             particle_cells.emplace_back(dense_particle_cells[pitr->first]);
-            // Save zone id
-            particle_zones[nparticles] = zid;
+            // Save stresses
+            particle_stresses.emplace_back(stress_zones[zid]);
             // Update total particles
             ++nparticles;
           }
@@ -374,8 +376,8 @@ void generate_particle_files(const double xmin, const double xmax,
             dense_particle_coords.erase(pitr->first);
             // Save cell id
             particle_cells.emplace_back(dense_particle_cells[pitr->first]);
-            // Save zone id
-            particle_zones[nparticles] = zid;
+            // Save stresses
+            particle_stresses.emplace_back(stress_zones[zid]);
             // Update total particles
             ++nparticles;
           }
@@ -392,13 +394,8 @@ void generate_particle_files(const double xmin, const double xmax,
   // Particle cells
   write_particle_cells(particle_cells);
 
-  // std::vector<std::tuple<double, double, double, double, double, double>>
-  //     particle_stresses;
-  // write_particle_stresses();
-
-  // std::vector<std::tuple<double, double, double, double, double, double>>
-  //     particle_stresses_beginning;
-  // write_particle_stresses_beginning();
+  // Particle stresses
+  write_particle_stresses(particle_stresses);
 
   // Particle volume
   const double vol = (he * he) / (ppc * ppc);
@@ -407,12 +404,10 @@ void generate_particle_files(const double xmin, const double xmax,
 
 void load_flac(std::string fname,
                std::map<int, std::pair<double, double>> &gridpoints,
-               std::map<int, std::tuple<int, int, int, int>> &q_zones,
-               std::map<int, std::tuple<int, int, int>> &t_zones,
+               std::map<int, std::array<int, 4>> &q_zones,
+               std::map<int, std::array<int, 3>> &t_zones,
                std::vector<std::vector<int>> &zone_groups,
-               std::vector<std::string> &name_zone_groups,
-               std::vector<std::tuple<int, int, int>> &faces,
-               std::vector<std::vector<int>> &face_groups) {
+               std::vector<std::string> &name_zone_groups) {
   // Read FLAC
   std::ifstream infile(fname);
   if (infile.is_open()) {
@@ -442,9 +437,9 @@ void load_flac(std::string fname,
 
           // Quads versus triangles
           if (type == "Q4") {
-            q_zones[id] = std::make_tuple(n0, n1, n2, n3);
+            q_zones[id] = {n0, n1, n2, n3};
           } else if (type == "T3") {
-            t_zones[id] = std::make_tuple(n0, n1, n2);
+            t_zones[id] = {n0, n1, n2};
           }
 
         } else if (line.find("ZGROUP") != std::string::npos) {
@@ -507,23 +502,52 @@ void load_flac(std::string fname,
   }
 }
 
+void load_stress(std::string stress_fname,
+                 std::map<int, std::array<double, 4>> &stress_zones) {
+  // Read stress
+  std::ifstream infile(stress_fname);
+  if (infile.is_open()) {
+    // Read line by line
+    std::string line;
+    while (std::getline(infile, line)) {
+      // Ignore comments
+      if ((line.find("*") == std::string::npos) && (line != "")) {
+        //
+        std::istringstream iss(line);
+
+        // Zones
+        int id;
+        double eff_stress_xx, eff_stress_yy, stress_xy, u;
+        iss >> id >> eff_stress_xx >> eff_stress_yy >> stress_xy >> u;
+        stress_zones[id] = {eff_stress_xx, eff_stress_yy, stress_xy, u};
+      }
+    }
+
+    // Close
+    infile.close();
+  } else {
+    std::cout << "Unable to open stress file" << std::endl;
+    exit(1);
+  }
+}
+
 bool find_particle_quad(std::map<int, std::pair<double, double>> &gridpoints,
-                        std::tuple<int, int, int, int> &nodes,
+                        std::array<int, 4> &nodes,
                         std::pair<double, double> &particle_coord) {
   // Get nodes
-  const int n0 = std::get<0>(nodes);
-  const int n1 = std::get<1>(nodes);
-  const int n2 = std::get<2>(nodes);
-  const int n3 = std::get<3>(nodes);
+  const int n0 = nodes[0];
+  const int n1 = nodes[1];
+  const int n2 = nodes[2];
+  const int n3 = nodes[3];
 
   // Check triangle 0-1-2
-  std::tuple<int, int, int> nodes_tmp = std::make_tuple(n0, n1, n2);
+  std::array<int, 3> nodes_tmp = {n0, n1, n2};
   const bool t012 = find_particle_tri(gridpoints, nodes_tmp, particle_coord);
   if (t012)
     return true;
 
   // Check triangle 1-3-2
-  nodes_tmp = std::make_tuple(n1, n3, n2);
+  nodes_tmp = {n1, n3, n2};
   const bool t132 = find_particle_tri(gridpoints, nodes_tmp, particle_coord);
   if (t132)
     return true;
@@ -532,12 +556,12 @@ bool find_particle_quad(std::map<int, std::pair<double, double>> &gridpoints,
 }
 
 bool find_particle_tri(std::map<int, std::pair<double, double>> &gridpoints,
-                       std::tuple<int, int, int> &nodes,
+                       std::array<int, 3> &nodes,
                        std::pair<double, double> &particle_coord) {
   // Get nodes
-  const int n0 = std::get<0>(nodes);
-  const int n1 = std::get<1>(nodes);
-  const int n2 = std::get<2>(nodes);
+  const int n0 = nodes[0];
+  const int n1 = nodes[1];
+  const int n2 = nodes[2];
 
   // Get points
   const std::pair<double, double> p0 = gridpoints[n0];
@@ -600,6 +624,58 @@ void write_particle_cells(const std::vector<int> &particle_cells) {
     outfile.close();
   } else {
     std::cout << "Unable to open particle cell file for saving" << std::endl;
+    exit(1);
+  }
+}
+
+void write_particle_stresses(
+    const std::vector<std::array<double, 4>> &particle_stresses) {
+  // Number of particles
+  const int nparticles = particle_stresses.size();
+
+  // Write particle stresses
+  std::ofstream outfile("particles-stresses.txt");
+  if (outfile.is_open()) {
+    // Write header
+    outfile << nparticles << std::endl;
+    outfile << std::scientific << std::setprecision(10);
+
+    // Write particle
+    for (unsigned i = 0; i < particle_stresses.size(); i++) {
+      const double u = particle_stresses[i][3];
+      outfile << particle_stresses[i][0] + u << "\t"
+              << particle_stresses[i][1] + u << "\t" << 0.0 << "\t"
+              << particle_stresses[i][2] << "\t" << 0.0 << "\t" << 0.0
+              << std::endl;
+    }
+
+    // Close
+    outfile.close();
+  } else {
+    std::cout << "Unable to open particle stresses file for saving"
+              << std::endl;
+    exit(1);
+  }
+
+  // Write particle stresses
+  std::ofstream outfile_eff("particles-stresses-effective.txt");
+  if (outfile_eff.is_open()) {
+    // Write header
+    outfile_eff << nparticles << std::endl;
+    outfile_eff << std::scientific << std::setprecision(10);
+
+    // Write particle
+    for (unsigned i = 0; i < particle_stresses.size(); i++) {
+      outfile_eff << particle_stresses[i][0] << "\t" << particle_stresses[i][1]
+                  << "\t" << 0.0 << "\t" << particle_stresses[i][2] << "\t"
+                  << 0.0 << "\t" << 0.0 << std::endl;
+    }
+
+    // Close
+    outfile_eff.close();
+  } else {
+    std::cout << "Unable to open particle stresses effective file for saving"
+              << std::endl;
     exit(1);
   }
 }
@@ -680,9 +756,12 @@ int main(int argc, char *argv[]) {
     const double he = input_json.at("he").get<double>();
     const int ppc = input_json.at("ppc").get<double>();
     const std::string fname = input_json.at("file").get<std::string>();
+    const std::string stress_fname =
+        input_json.at("stress_file").get<std::string>();
 
     // Generate particle files
-    generate_particle_files(xmin, xmax, ymin, ymax, he, ppc, fname);
+    generate_particle_files(xmin, xmax, ymin, ymax, he, ppc, fname,
+                            stress_fname);
   } catch (const std::exception &exception) {
     std::cout << "Failed to find particle settings: " << exception.what()
               << std::endl;

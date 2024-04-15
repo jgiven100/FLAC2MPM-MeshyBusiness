@@ -17,7 +17,7 @@ cd build/
 ```
 
 ## Input file
-Example input file:
+**Example input file:**
 ```
 {
     "xmin": -100,
@@ -27,10 +27,11 @@ Example input file:
     "he": 1.0,
     "ppc": 2,
     "file": "FLAC-output.f2grid"
+    "stress_file": "FLAC-output-stress.txt"
 }
 ```
 
-Definitions:
+**Definitions:**
 * `"xmin"` : Minimum x-value for mesh
 * `"xmax"` : Maximum x-value for mesh
 * `"ymin"` : Minimum y-value for mesh
@@ -38,6 +39,14 @@ Definitions:
 * `"he"` : Characteristic length (height) of element
 * `"ppc"` : Particles per cell where `PPC=N` means `N x N` distribution (equally spaced)
 * `"file"` : Name of FLAC output file
+* `"stress_file"` : Name of FLAC output stress file
+
+**Stress file:**
+
+Stress file should be a text file comprised on rows of zone id, x-dir normal stress (effective), y-dir normal stress (effective), xy-dir shear stress, and pore pressure. Do not include a header. Use `space` as a delimiter. Stresses and pressure should use *tension positive*.
+```
+zid  sigma'_xx  sigma'_yy  sigma_xy  u
+```
 
 ## Outputs
 
@@ -49,7 +58,5 @@ Definitions:
 * Particle coordinates
 * Particle cells
 * Particle volumes
-
-*TODO*
 * Particle stresses
-* Particle stresses (beginning)
+* Particle stresses (effective)
