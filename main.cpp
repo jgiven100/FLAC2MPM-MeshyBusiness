@@ -35,6 +35,10 @@ void load_flac(std::string fname,
 void load_stress(std::string stress_fname,
                  std::map<int, std::array<double, 4>> &stress_zones);
 
+// Read FLAC materials
+void load_material(std::string material_fname,
+                   std::map<int, std::array<double, 5>> &material_zones);
+
 // Find particle
 bool find_particle_quad(std::map<int, std::pair<double, double>> &gridpoints,
                         std::array<int, 4> &nodes,
@@ -56,6 +60,10 @@ void write_particle_cells(const std::vector<int> &particle_cells);
 // Save particle stresses txt file
 void write_particle_stresses(
     const std::vector<std::array<double, 4>> &particle_stresses);
+
+// Save particle materials txt file
+void write_particle_materials(
+    const std::vector<std::array<double, 5>> &particle_materials);
 
 // Save particle volumes txt file
 void write_particle_volumes(const int nparticles, const double vol);
@@ -240,7 +248,8 @@ void generate_particle_files(const double xmin, const double xmax,
                              const double ymin, const double ymax,
                              const double he, const int ppc,
                              const std::string fname,
-                             const std::string stress_fname) {
+                             const std::string stress_fname,
+                             const std::string material_fname) {
   // Number of elements in each direction
   int nelem_x, nelem_y;
   check_compatibility(nelem_x, nelem_y, xmin, xmax, ymin, ymax, he);
@@ -291,6 +300,10 @@ void generate_particle_files(const double xmin, const double xmax,
   std::map<int, std::array<double, 4>> stress_zones;
   load_stress(stress_fname, stress_zones);
 
+  // Load FLAC materials
+  std::map<int, std::array<double, 5>> material_zones;
+  load_material(material_fname, material_zones);
+
   // Bounding box
   double xmin_flac = 1.E+6;
   double xmax_flac = -1.E+6;
@@ -325,6 +338,8 @@ void generate_particle_files(const double xmin, const double xmax,
   std::vector<int> particle_cells;
   // Particle stresses (order matching how particles are located)
   std::vector<std::array<double, 4>> particle_stresses;
+  // Particle materials (order matching how particles are located)
+  std::vector<std::array<double, 5>> particle_materials;
   // Total particles
   int nparticles = 0;
 
@@ -360,6 +375,8 @@ void generate_particle_files(const double xmin, const double xmax,
             particle_cells.emplace_back(dense_particle_cells[pitr->first]);
             // Save stresses
             particle_stresses.emplace_back(stress_zones[zid]);
+            // Save materials
+            particle_materials.emplace_back(material_zones[zid]);
             // Update total particles
             ++nparticles;
           }
@@ -378,6 +395,8 @@ void generate_particle_files(const double xmin, const double xmax,
             particle_cells.emplace_back(dense_particle_cells[pitr->first]);
             // Save stresses
             particle_stresses.emplace_back(stress_zones[zid]);
+            // Save materials
+            particle_materials.emplace_back(material_zones[zid]);
             // Update total particles
             ++nparticles;
           }
@@ -396,6 +415,9 @@ void generate_particle_files(const double xmin, const double xmax,
 
   // Particle stresses
   write_particle_stresses(particle_stresses);
+
+  // Particle materials
+  write_particle_materials(particle_materials);
 
   // Particle volume
   const double vol = (he * he) / (ppc * ppc);
@@ -527,6 +549,50 @@ void load_stress(std::string stress_fname,
     infile.close();
   } else {
     std::cout << "Unable to open stress file" << std::endl;
+    exit(1);
+  }
+}
+
+void load_material(std::string material_fname,
+                   std::map<int, std::array<double, 5>> &material_zones) {
+  // Read stress
+  std::ifstream infile(material_fname);
+  if (infile.is_open()) {
+    // Read line by line
+    std::string line;
+    while (std::getline(infile, line)) {
+      // Ignore comments
+      if ((line.find("*") == std::string::npos) && (line != "")) {
+        //
+        std::istringstream iss(line);
+
+        // Zones
+        int id;
+        double G, K, density, c_liq, c_dry;
+        iss >> id >> G >> K >> density >> c_liq >> c_dry;
+        // Elastic moduli
+        double poisson_ratio = 0.3;
+        double youngs_modulus = 1.0e+9;
+        if ((G > 0.) && (K > 0.)) {
+          poisson_ratio = (3 * K - 2 * G) / (2 * (3 * K + G));
+          youngs_modulus = (9 * K * G) / (3 * K + G);
+        }
+        // Strength
+        const double friction = 0.;
+        double cohesion = 1.0e+9;
+        if ((c_liq > 0.) || (c_dry > 0.)) {
+          cohesion = (c_liq > 0.) ? c_liq : c_dry;
+        }
+
+        material_zones[id] = {poisson_ratio, youngs_modulus, density, friction,
+                              cohesion};
+      }
+    }
+
+    // Close
+    infile.close();
+  } else {
+    std::cout << "Unable to open material file" << std::endl;
     exit(1);
   }
 }
@@ -680,6 +746,35 @@ void write_particle_stresses(
   }
 }
 
+void write_particle_materials(
+    const std::vector<std::array<double, 5>> &particle_materials) {
+  // Number of particles
+  const int nparticles = particle_materials.size();
+
+  // Write particle materials
+  std::ofstream outfile("particles-materials.txt");
+  if (outfile.is_open()) {
+    // Write header
+    outfile << nparticles << std::endl;
+    outfile << std::scientific << std::setprecision(10);
+
+    // Write particle
+    for (unsigned i = 0; i < particle_materials.size(); i++) {
+      outfile << particle_materials[i][0] << "\t" << particle_materials[i][1]
+              << "\t" << particle_materials[i][2] << "\t"
+              << particle_materials[i][3] << "\t" << particle_materials[i][4]
+              << "\t" << std::endl;
+    }
+
+    // Close
+    outfile.close();
+  } else {
+    std::cout << "Unable to open particle material file for saving"
+              << std::endl;
+    exit(1);
+  }
+}
+
 void write_particle_volumes(const int nparticles, const double vol) {
   // Write particle volumes
   std::ofstream outfile("particles-volumes.txt");
@@ -758,10 +853,12 @@ int main(int argc, char *argv[]) {
     const std::string fname = input_json.at("file").get<std::string>();
     const std::string stress_fname =
         input_json.at("stress_file").get<std::string>();
+    const std::string material_fname =
+        input_json.at("material_file").get<std::string>();
 
     // Generate particle files
     generate_particle_files(xmin, xmax, ymin, ymax, he, ppc, fname,
-                            stress_fname);
+                            stress_fname, material_fname);
   } catch (const std::exception &exception) {
     std::cout << "Failed to find particle settings: " << exception.what()
               << std::endl;

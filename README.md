@@ -28,6 +28,7 @@ cd build/
     "ppc": 2,
     "file": "FLAC-output.f2grid"
     "stress_file": "FLAC-output-stress.txt"
+    "material_file": "FLAC-output-material.txt"
 }
 ```
 
@@ -43,9 +44,16 @@ cd build/
 
 **Stress file:**
 
-Stress file should be a text file comprised on rows of zone id, x-dir normal stress (effective), y-dir normal stress (effective), xy-dir shear stress, and pore pressure. Do not include a header. Use `space` as a delimiter. Stresses and pressure should use *tension positive*.
+Stress file should be a text file comprised of rows with zone id, x-dir normal stress (effective), y-dir normal stress (effective), xy-dir shear stress, and pore pressure. Do not include a header. Use `space` as a delimiter. Stresses and pressure should use *tension positive*.
 ```
 zid  sigma'_xx  sigma'_yy  sigma_xy  u
+```
+
+**Material file:**
+
+Material file should be a text file comprised of rows with zone id, bulk modulus, shear modulus, density, liquefied strength, and drained strength. Do not include a header. Use `space` as a delimiter. Drained strength is adopted unless liquefied strength `!=0`.
+```
+zid  shear_modulus  bulk_modulus  density  c_liq  c_dry
 ```
 
 ## Outputs
@@ -60,3 +68,4 @@ zid  sigma'_xx  sigma'_yy  sigma_xy  u
 * Particle volumes
 * Particle stresses
 * Particle stresses (effective)
+* Particle materials
