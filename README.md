@@ -1,5 +1,5 @@
 # FLAC2MPM-MeshyBusiness
-Generate mesh and particle input files for MPM runout analysis based on FLAC output. 
+Generate mesh and particle input files for MPM runout analysis based on FLAC output.
 
 ## Compile
 Start from `FLAC2MPM-MeshyBusiness` directory:
@@ -69,3 +69,7 @@ zid  shear_modulus  bulk_modulus  density  c_liq  c_dry
 * Particle stresses
 * Particle stresses (effective)
 * Particle materials
+
+## Python Preproc
+
+The "preproc.py" code converts the FLAC output .csv files into the stress.txt and material.txt files which are inputs to the cpp code described above.
