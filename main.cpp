@@ -574,8 +574,8 @@ void load_material(std::string material_fname,
         double poisson_ratio = 0.3;
         double youngs_modulus = 1.0e+9;
         if ((G > 0.) && (K > 0.)) {
-          poisson_ratio = (3 * K - 2 * G) / (2 * (3 * K + G));
-          youngs_modulus = (9 * K * G) / (3 * K + G);
+          poisson_ratio = (3. * K - 2. * G) / (2. * (3. * K + G));
+          youngs_modulus = (9. * K * G) / (3. * K + G);
         }
         // Strength
         const double friction = 0.;
@@ -637,16 +637,16 @@ bool find_particle_tri(std::map<int, std::pair<double, double>> &gridpoints,
   const double area =
       0.5 * (-p1.second * p2.first + p0.second * (-p1.first + p2.first) +
              p0.first * (p1.second - p2.second) + p1.first * p2.second);
-  const double s = 1 / (2 * area) *
+  const double s = 1. / (2. * area) *
                    (p0.second * p2.first - p0.first * p2.second +
                     (p2.second - p0.second) * particle_coord.first +
                     (p0.first - p2.first) * particle_coord.second);
-  const double t = 1 / (2 * area) *
+  const double t = 1. / (2. * area) *
                    (p0.first * p1.second - p0.second * p1.first +
                     (p0.second - p1.second) * particle_coord.first +
                     (p1.first - p0.first) * particle_coord.second);
 
-  return (s > 0 && t > 0 && (1 - s - t) > 0);
+  return (s > 0. && t > 0. && (1. - s - t) > 0.);
 }
 
 void write_particle_coords(
