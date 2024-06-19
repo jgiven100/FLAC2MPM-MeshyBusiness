@@ -646,7 +646,8 @@ bool find_particle_tri(std::map<int, std::pair<double, double>> &gridpoints,
                     (p0.second - p1.second) * particle_coord.first +
                     (p1.first - p0.first) * particle_coord.second);
 
-  return (s > 0. && t > 0. && (1. - s - t) > 0.);
+  const double tol = 1.e-8 * area;
+  return (s >= -tol && t >= -tol && (1. - s - t) >= -tol);
 }
 
 void write_particle_coords(
