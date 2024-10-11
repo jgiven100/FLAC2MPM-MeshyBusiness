@@ -37,7 +37,7 @@ void load_stress(std::string stress_fname,
 
 // Read FLAC materials
 void load_material(std::string material_fname,
-                   std::map<int, std::array<double, 5>> &material_zones);
+                   std::map<int, std::array<double, 7>> &material_zones);
 
 // Find particle
 bool find_particle_quad(std::map<int, std::pair<double, double>> &gridpoints,
@@ -63,7 +63,7 @@ void write_particle_stresses(
 
 // Save particle materials txt file
 void write_particle_materials(
-    const std::vector<std::array<double, 5>> &particle_materials);
+    const std::vector<std::array<double, 7>> &particle_materials);
 
 // Save particle volumes txt file
 void write_particle_volumes(const int nparticles, const double vol);
@@ -301,7 +301,7 @@ void generate_particle_files(const double xmin, const double xmax,
   load_stress(stress_fname, stress_zones);
 
   // Load FLAC materials
-  std::map<int, std::array<double, 5>> material_zones;
+  std::map<int, std::array<double, 7>> material_zones;
   load_material(material_fname, material_zones);
 
   // Bounding box
@@ -339,7 +339,7 @@ void generate_particle_files(const double xmin, const double xmax,
   // Particle stresses (order matching how particles are located)
   std::vector<std::array<double, 4>> particle_stresses;
   // Particle materials (order matching how particles are located)
-  std::vector<std::array<double, 5>> particle_materials;
+  std::vector<std::array<double, 7>> particle_materials;
   // Total particles
   int nparticles = 0;
 
@@ -486,8 +486,8 @@ void load_flac(std::string fname,
             }
           }
 
-          // Save "Construction" zones
-          if (slot_name == "Construction") {
+          // Save "Default" zones
+          if (slot_name == "Default") {
 
             std::vector<int> zone_group;
 
@@ -554,7 +554,7 @@ void load_stress(std::string stress_fname,
 }
 
 void load_material(std::string material_fname,
-                   std::map<int, std::array<double, 5>> &material_zones) {
+                   std::map<int, std::array<double, 7>> &material_zones) {
   // Read stress
   std::ifstream infile(material_fname);
   if (infile.is_open()) {
@@ -568,24 +568,45 @@ void load_material(std::string material_fname,
 
         // Zones
         int id;
-        double G, K, density, c_liq, c_dry;
-        iss >> id >> G >> K >> density >> c_liq >> c_dry;
+        double G, K, density, drained_phi, drained_c, current_su, residual_su,
+            str2rem;
+        iss >> id >> G >> K >> density >> drained_phi >> drained_c >>
+            current_su >> residual_su >> str2rem;
         // Elastic moduli
         double poisson_ratio = 0.3;
-        double youngs_modulus = 1.0e+9;
+        double youngs_modulus = 1.0E+9;
         if ((G > 0.) && (K > 0.)) {
           poisson_ratio = (3. * K - 2. * G) / (2. * (3. * K + G));
           youngs_modulus = (9. * K * G) / (3. * K + G);
         }
         // Strength
-        const double friction = 0.;
-        double cohesion = 1.0e+9;
-        if ((c_liq > 0.) || (c_dry > 0.)) {
-          cohesion = (c_liq > 0.) ? c_liq : c_dry;
+        double friction = 0.;
+        double current_c = 0.;
+        double residual_c = 0.;
+        // OPTION 1: UNDRAINED
+        if ((current_su > 0.) && (residual_su > 0.)) {
+          current_c = current_su;
+          residual_c = residual_su;
+        }
+        // OPTION 2: DRAINED
+        else if ((drained_phi > 0.) || (drained_c > 0.)) {
+          friction = drained_phi;
+          current_c = drained_c;
+          residual_c = drained_c;
+          // ADD COHESION FLOOR
+          if (drained_c < 15000.){
+            current_c = 15000.;
+            residual_c = 15000.;
+          }
+        }
+        // OPTION 3: BEDROCK
+        else {
+          current_c = 1.0E+9;
+          residual_c = 1.0E+9;
         }
 
         material_zones[id] = {poisson_ratio, youngs_modulus, density, friction,
-                              cohesion};
+                              current_c,     residual_c,     str2rem};
       }
     }
 
@@ -748,7 +769,7 @@ void write_particle_stresses(
 }
 
 void write_particle_materials(
-    const std::vector<std::array<double, 5>> &particle_materials) {
+    const std::vector<std::array<double, 7>> &particle_materials) {
   // Number of particles
   const int nparticles = particle_materials.size();
 
@@ -764,7 +785,8 @@ void write_particle_materials(
       outfile << particle_materials[i][0] << "\t" << particle_materials[i][1]
               << "\t" << particle_materials[i][2] << "\t"
               << particle_materials[i][3] << "\t" << particle_materials[i][4]
-              << "\t" << std::endl;
+              << "\t" << particle_materials[i][5] << "\t"
+              << particle_materials[i][6] << std::endl;
     }
 
     // Close
