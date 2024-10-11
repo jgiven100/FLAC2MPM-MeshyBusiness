@@ -51,9 +51,9 @@ zid  sigma'_xx  sigma'_yy  sigma_xy  u
 
 **Material file:**
 
-Material file should be a text file comprised of rows with zone id, bulk modulus, shear modulus, density, liquefied strength, and drained strength. Do not include a header. Use `space` as a delimiter. Drained strength is adopted unless liquefied strength `!=0`.
+Material file should be a text file comprised of rows with zone id, bulk modulus, shear modulus, density, drained friction angle, drained cohesion, current undrained shear strength, residual undrained shear strength, and remaining plastic strain to reach residual strength. Do not include a header. Use `space` as a delimiter. Drained strength is adopted unless liquefied strength `!=0`.
 ```
-zid  shear_modulus  bulk_modulus  density  c_liq  c_dry
+zid  shear_modulus  bulk_modulus  density  drn_phi  drn_c  cur_su  res_su  str2rem
 ```
 
 ## Outputs

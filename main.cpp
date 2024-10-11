@@ -594,7 +594,7 @@ void load_material(std::string material_fname,
           current_c = drained_c;
           residual_c = drained_c;
           // ADD COHESION FLOOR
-          if (drained_c < 15000.){
+          if (drained_c < 15000.) {
             current_c = 15000.;
             residual_c = 15000.;
           }
