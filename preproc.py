@@ -1,8 +1,10 @@
 import pandas as pd
 
 # --- INPUTS --- #
-in_dir = '~/FLAC2MPM/InputGeneration/LSFD/Cal3_st2p0'
+in_dir = '~/FLAC2MPM/InputGeneration/LSFD/Cal3_St2p0/'
 input_csv = 'LSF_Cal3_8per_zone.csv'
+# in_dir = '~/FLAC2MPM/InputGeneration/USFD/Cal3_St2p0/'
+# input_csv = 'USF_Cal3_8per_zone.csv'
 output_material = 'material.txt'
 output_stress = 'stress.txt'
 
@@ -22,7 +24,7 @@ material_data = data[material_columns]
 # Extract the required columns for stress.txt and reverse the sign of the 'pp' column
 # zid  sigma'_xx  sigma'_yy  sigma_xy  -u
 stress_columns = ['ZoneNum', 'esxx', 'esyy', 'sxy', 'pp']
-stress_data = data[stress_columns]
+stress_data = data[stress_columns].copy()
 stress_data['pp'] = -stress_data['pp']
 
 # Save to text files without headers and space delimiter
