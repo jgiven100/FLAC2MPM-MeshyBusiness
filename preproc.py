@@ -1,10 +1,10 @@
 import pandas as pd
 
 # --- INPUTS --- #
-in_dir = '~/FLAC2MPM/CoreInputFiles/'
-input_csv = 'Example_Dam_FR_SS_Ru_CoreSu_0p05_zone.csv'
-output_material = '05_material.txt'
-output_stress = '05_stress.txt'
+in_dir = '~/FLAC2MPM/InputGeneration/LSFD/Cal3_st2p0'
+input_csv = 'LSF_Cal3_8per_zone.csv'
+output_material = 'material.txt'
+output_stress = 'stress.txt'
 
 # --- MAIN --- #
 # Load the CSV file
@@ -15,14 +15,14 @@ data = pd.read_csv(input_path)
 data.columns = data.columns.str.strip()
 
 # Extract the required columns for material.txt
-# zid  shear_modulus  bulk_modulus  density  c_liq  c_dry
-material_columns = ['ZoneNum', 'shear', 'bulk', 'density', 'liqstr', 'drnstr']
+# zid  shear_modulus  bulk_modulus  density  drained_phi drained_cohesion current_su residual_su remaining_pdstrain
+material_columns = ['ZoneNum', 'shear', 'bulk', 'density', 'drnphi', 'drnc', 'cursu', 'ressu', 'str2rem']
 material_data = data[material_columns]
 
 # Extract the required columns for stress.txt and reverse the sign of the 'pp' column
-#zid  sigma'_xx  sigma'_yy  sigma_xy  -u
+# zid  sigma'_xx  sigma'_yy  sigma_xy  -u
 stress_columns = ['ZoneNum', 'esxx', 'esyy', 'sxy', 'pp']
-stress_data = data[stress_columns].copy()
+stress_data = data[stress_columns]
 stress_data['pp'] = -stress_data['pp']
 
 # Save to text files without headers and space delimiter
