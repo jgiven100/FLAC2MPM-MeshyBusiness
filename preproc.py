@@ -5,13 +5,15 @@ in_dir = '~/FLAC2MPM/InputGeneration/LSFD/Cal3_St2p0/'
 input_csv = 'LSF_Cal3_8per_zone.csv'
 # in_dir = '~/FLAC2MPM/InputGeneration/USFD/Cal3_St2p0/'
 # input_csv = 'USF_Cal3_8per_zone.csv'
+
 output_material = 'material.txt'
 output_stress = 'stress.txt'
+col_names = ['ZoneNum', 'cent_x', 'cent_y', 'esyy', 'esxx', 'sxy', 'pp', 'density', 'drnphi', 'drnc', 'cursu', 'ressu', 'str2rem', 'shear', 'bulk', 'descrip']
 
 # --- MAIN --- #
-# Load the CSV file
+# Load the CSV file with expected column names
 input_path = in_dir + input_csv
-data = pd.read_csv(input_path)
+data = pd.read_csv(input_path, names=col_names, skiprows=1)
 
 # Strip any leading/trailing spaces from the column names
 data.columns = data.columns.str.strip()
