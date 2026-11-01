@@ -2,11 +2,13 @@
 using json = nlohmann::json;
 
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,6 +41,11 @@ void load_stress(std::string stress_fname,
 void load_material(std::string material_fname,
                    std::map<int, std::array<double, 7>> &material_zones);
 
+// Convert drained material to undrained
+void convert_material_undrained(
+    const std::map<int, std::array<double, 4>> &stress_zones,
+    std::map<int, std::array<double, 7>> &material_zones);
+
 // Find particle
 bool find_particle_quad(std::map<int, std::pair<double, double>> &gridpoints,
                         std::array<int, 4> &nodes,
@@ -53,6 +60,9 @@ bool find_particle_tri(std::map<int, std::pair<double, double>> &gridpoints,
 void write_particle_coords(
     const int id,
     const std::vector<std::pair<double, double>> &particle_coords);
+
+// Save particle blocks txt file
+void write_particle_blocks(const std::vector<int> &particle_blocks);
 
 // Save particle cells txt file
 void write_particle_cells(const std::vector<int> &particle_cells);
@@ -304,6 +314,9 @@ void generate_particle_files(const double xmin, const double xmax,
   std::map<int, std::array<double, 7>> material_zones;
   load_material(material_fname, material_zones);
 
+  // Convert drained material to undrained
+  convert_material_undrained(stress_zones, material_zones);
+
   // Bounding box
   double xmin_flac = 1.E+6;
   double xmax_flac = -1.E+6;
@@ -334,6 +347,8 @@ void generate_particle_files(const double xmin, const double xmax,
       dense_particle_coords.erase(pitr->first);
   }
 
+  // Particle blocks (order matching how particles are located)
+  std::vector<int> particle_blocks;
   // Particle cells (order matching how particles are located)
   std::vector<int> particle_cells;
   // Particle stresses (order matching how particles are located)
@@ -371,6 +386,8 @@ void generate_particle_files(const double xmin, const double xmax,
             particle_coords_zone.emplace_back(pitr->second);
             // Remove particle coordinate from dense list
             dense_particle_coords.erase(pitr->first);
+            // Save block id
+            particle_blocks.emplace_back(i);
             // Save cell id
             particle_cells.emplace_back(dense_particle_cells[pitr->first]);
             // Save stresses
@@ -391,6 +408,8 @@ void generate_particle_files(const double xmin, const double xmax,
             particle_coords_zone.emplace_back(pitr->second);
             // Remove particle coordinate from dense list
             dense_particle_coords.erase(pitr->first);
+            // Save block id
+            particle_blocks.emplace_back(i);
             // Save cell id
             particle_cells.emplace_back(dense_particle_cells[pitr->first]);
             // Save stresses
@@ -409,6 +428,95 @@ void generate_particle_files(const double xmin, const double xmax,
     }
     write_particle_coords(i, particle_coords_zone);
   }
+
+  // Handle zones outside group
+  std::cout << "particles-" << name_zone_groups.size() << ".txt -> UNASSIGNED"
+            << std::endl;
+
+  // Update copy of dense particles
+  dense_particle_coords_copy = dense_particle_coords;
+
+  // Get list of zones for current zone group
+  std::set<int> combined_keys;
+  // Insert keys from q_zones
+  for (const auto &[key, _] : q_zones) {
+    combined_keys.insert(key);
+  }
+  // Insert keys from t_zones
+  for (const auto &[key, _] : t_zones) {
+    combined_keys.insert(key);
+  }
+
+  // Nested loop to remove elements from combined_keys
+  for (unsigned i = 0; i < zone_groups.size(); ++i) {
+    for (unsigned j = 0; j < zone_groups[i].size(); ++j) {
+      combined_keys.erase(zone_groups[i][j]);
+    }
+  }
+
+  const std::vector<int> zone_group(combined_keys.begin(), combined_keys.end());
+
+  // Particle coordinates in current zone
+  std::vector<std::pair<double, double>> particle_coords_zone;
+  particle_coords_zone.clear();
+
+  // Loop each zone
+  for (int zid : zone_group) {
+
+    // Check if zone id is quad or triangle
+    if (q_zones.find(zid) != q_zones.end()) {
+      // Loop particles
+      for (auto pitr = dense_particle_coords_copy.begin();
+           pitr != dense_particle_coords_copy.end(); ++pitr) {
+        if (find_particle_quad(gridpoints, q_zones[zid], pitr->second)) {
+          // Save particle coordinate
+          particle_coords_zone.emplace_back(pitr->second);
+          // Remove particle coordinate from dense list
+          dense_particle_coords.erase(pitr->first);
+          // Save block id
+          particle_blocks.emplace_back(name_zone_groups.size());
+          // Save cell id
+          particle_cells.emplace_back(dense_particle_cells[pitr->first]);
+          // Save stresses
+          particle_stresses.emplace_back(stress_zones[zid]);
+          // Save materials
+          particle_materials.emplace_back(material_zones[zid]);
+          // Update total particles
+          ++nparticles;
+        }
+      }
+
+    } else if (t_zones.find(zid) != t_zones.end()) {
+      // Loop particles
+      for (auto pitr = dense_particle_coords_copy.begin();
+           pitr != dense_particle_coords_copy.end(); ++pitr) {
+        if (find_particle_tri(gridpoints, t_zones[zid], pitr->second)) {
+          // Save particle coordinate
+          particle_coords_zone.emplace_back(pitr->second);
+          // Remove particle coordinate from dense list
+          dense_particle_coords.erase(pitr->first);
+          // Save block id
+          particle_blocks.emplace_back(name_zone_groups.size());
+          // Save cell id
+          particle_cells.emplace_back(dense_particle_cells[pitr->first]);
+          // Save stresses
+          particle_stresses.emplace_back(stress_zones[zid]);
+          // Save materials
+          particle_materials.emplace_back(material_zones[zid]);
+          // Update total particles
+          ++nparticles;
+        }
+      }
+
+    } else {
+      std::cout << "Unable to find zone id" << std::endl;
+      exit(1);
+    }
+  }
+  write_particle_coords(name_zone_groups.size(), particle_coords_zone);
+
+  // Particle blocks
+  write_particle_blocks(particle_blocks);
 
   // Particle cells
   write_particle_cells(particle_cells);
@@ -594,10 +702,10 @@ void load_material(std::string material_fname,
           current_c = drained_c;
           residual_c = drained_c;
           // ADD COHESION FLOOR
-          if (drained_c < 15000.) {
-            current_c = 15000.;
-            residual_c = 15000.;
-          }
+          // if (drained_c < 15000.) {
+          //   current_c = 15000.;
+          //   residual_c = 15000.;
+          // }
         }
         // OPTION 3: BEDROCK
         else {
@@ -615,6 +723,50 @@ void load_material(std::string material_fname,
   } else {
     std::cout << "Unable to open material file" << std::endl;
     exit(1);
+  }
+}
+
+void convert_material_undrained(
+    const std::map<int, std::array<double, 4>> &stress_zones,
+    std::map<int, std::array<double, 7>> &material_zones) {
+
+  // Loop each zone
+  for (const auto &[key, stress_zone] : stress_zones) {
+    if (material_zones.find(key) != material_zones.end()) {
+
+      // Get material
+      const std::array<double, 7> material_zone = material_zones[key];
+
+      // Only update if *not* bedrock
+      if (material_zone[0] > 0.25) {
+
+        // Set undrained elastic moduli
+        material_zones[key][0] = 0.49;
+        material_zones[key][1] =
+            3. * material_zone[1] / (2. * (1. + material_zone[0]));
+
+        // Only update if friction angle is greater than zero
+        if (material_zone[3] > 0.) {
+          // Get drained materials
+          const double phi = material_zone[3] * 3.14159265 / 180.;
+          const double c_pk = material_zone[4];
+          const double c_res = material_zone[5];
+          // Get 2D mean effective stress (convert to compression positive)
+          const double s = -0.5 * (stress_zone[0] + stress_zone[1]);
+          // Set undrained strength
+          material_zones[key][3] = 0.;
+          material_zones[key][4] =
+              (s * std::sin(phi) + c_pk * std::cos(phi)) * std::cos(phi);
+          material_zones[key][5] =
+              (s * std::sin(phi) + c_res * std::cos(phi)) * std::cos(phi);
+        }
+      }
+    } else {
+      std::cout
+          << "Unable to find shared key in stress_zones and materials_zones"
+          << std::endl;
+      exit(1);
+    }
   }
 }
 
@@ -696,6 +848,22 @@ void write_particle_coords(
   } else {
     std::cout << "Unable to open particle coordinate file for saving"
               << std::endl;
+    exit(1);
+  }
+}
+
+void write_particle_blocks(const std::vector<int> &particle_blocks) {
+  // Write particle blocks
+  std::ofstream outfile("particle-blocks.txt");
+  if (outfile.is_open()) {
+    // Write particle
+    for (unsigned i = 0; i < particle_blocks.size(); i++)
+      outfile << i << " " << particle_blocks[i] << std::endl;
+
+    // Close
+    outfile.close();
+  } else {
+    std::cout << "Unable to open particle blocks file for saving" << std::endl;
     exit(1);
   }
 }
